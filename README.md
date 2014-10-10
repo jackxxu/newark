@@ -29,6 +29,10 @@ class App
 
   include Newark
 
+  rescue_from YourCustomException do |exception|
+    [500, {'Content-Type' => 'plain/text'}, exception.message]
+  end
+
   before do
     headers['X-Newark-Version'] = Newark::VERSION
   end

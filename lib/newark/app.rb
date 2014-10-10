@@ -42,6 +42,14 @@ module Newark
         @after_hooks ||= []
         @after_hooks << block
       end
+
+      def rescue_from(exception_class, *args, &block)
+        if block.is_a?(Proc)
+          (@exception_handers ||= {})[exception_class] = block
+        else
+          (@exception_handers ||= {})[exception_class] = args[0].to_sym
+        end
+      end
     end
 
     attr_reader :request, :response
@@ -51,6 +59,7 @@ module Newark
       @before_hooks = self.class.instance_variable_get(:@before_hooks)
       @after_hooks  = self.class.instance_variable_get(:@after_hooks)
       @routes       = self.class.instance_variable_get(:@routes)
+      @exception_handers = self.class.instance_variable_get(:@exception_handers)
     end
 
     def call(env)
@@ -62,6 +71,16 @@ module Newark
       @request  = Request.new(@env)
       @response = Response.new
       route
+    rescue => e
+      if handler = @exception_handers[e.class]
+        if handler.is_a?(Proc)
+          handler.call(e)
+        else
+          send(handler, e)
+        end
+      else
+        raise e
+      end
     end
 
     def headers

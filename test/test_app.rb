@@ -1,7 +1,17 @@
 require 'helper'
+require 'json'
+
+class InvalidAccountError < StandardError; end
+class UnknownUserError    < StandardError; end
 
 class NameApp
   include Newark
+
+  rescue_from InvalidAccountError do |exception|
+    [500, {'Content-Type' => 'plain/text'}, exception.message]
+  end
+
+  rescue_from UnknownUserError, :respond_to_invalid_user_error
 
   before do
     if params[:key] && params[:key] != '23'
@@ -28,11 +38,24 @@ class NameApp
 
   get '/hello2', :hello
 
+  get '/error/:id' do
+    if params[:id] == '123'
+      raise InvalidAccountError, "errors occurred for #{params[:id]}"
+    elsif params[:id] == 'unknown_user'
+      raise UnknownUserError, "invalid user id for #{params[:id]}"
+    end
+  end
+
   private
 
   def hello
     'Hello'
   end
+
+  def respond_to_invalid_user_error(exception)
+    [404, {'Content-Type' => 'application/json'}, [{msg: exception.message}.to_json]]
+  end
+
 end
 
 class TestApp < MiniTest::Unit::TestCase
@@ -64,6 +87,20 @@ class TestApp < MiniTest::Unit::TestCase
     refute last_response.ok?
     assert_equal 403, last_response.status
     assert_equal '', last_response.body
+  end
+
+  def test_rescue_from_block
+    get '/error/123'
+    refute last_response.ok?
+    assert_equal 500, last_response.status
+    assert_equal 'errors occurred for 123', last_response.body
+  end
+
+  def test_rescue_from_method
+    get '/error/unknown_user'
+    refute last_response.ok?
+    assert_equal 404, last_response.status
+    assert_equal '{"msg":"invalid user id for unknown_user"}', last_response.body
   end
 
 end
